@@ -28,7 +28,7 @@ namespace {
 // ⚠ LA RAMA DE ESTE REPOSITORIO ES `master`, NO `main`.
 //   Escribir `main` por costumbre publica bien y deja el enlace en 404: todo
 //   el mundo sin pack, y el launcher sin forma de saber por que. Ya paso.
-const auto kRepo = QStringLiteral("corderovibes-collab/luna-eternal-pack");
+const auto kRepo = QStringLiteral("Pokereport-Minecraft/luna-eternal-pack");
 const auto kBranch = QStringLiteral("master");
 }  // namespace
 

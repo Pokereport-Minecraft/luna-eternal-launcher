@@ -16,6 +16,8 @@ class LunaConfigTest : public QObject {
 
     void test_lasUrlSonValidas()
     {
+        QCOMPARE(Luna::pointerUrl(), QStringLiteral("https://github.com/Pokereport-Minecraft/luna-eternal-pack/releases/download/pack-manifest/latest.json"));
+        QCOMPARE(Luna::fallbackManifestUrl(), QStringLiteral("https://raw.githubusercontent.com/Pokereport-Minecraft/luna-eternal-pack/master/manifest.json"));
         for (const auto& u : { Luna::pointerUrl(), Luna::fallbackManifestUrl() }) {
             const QUrl url(u);
             QVERIFY2(url.isValid(), qPrintable(u));
