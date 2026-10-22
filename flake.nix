@@ -122,6 +122,8 @@
         packages = with pkgs; [
           ccache
           ninja
+          # .clang-tidy uses DefaultCase, supported by LLVM 22 and newer.
+          llvmPackages_22.clang-tools
         ];
       };
     });

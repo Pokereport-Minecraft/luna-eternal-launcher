@@ -36,6 +36,10 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v31
 
+      - name: Verify analyzer configuration before compiling
+        run: |
+          nix develop --command bash -c 'clang-tidy --version && clang-tidy -verify-config'
+
       - name: Run build
         # TODO(@getchoo): Figure out how to make this work with PCH
         run: |
