@@ -1,5 +1,11 @@
 name: PokeReport Linux and macOS
 on:
+  pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'launcher/**'
+      - 'scripts/package-unix.py'
+      - '.github/workflows/pokereport-unix.yml'
   workflow_dispatch:
     inputs:
       artifact_run_id:
