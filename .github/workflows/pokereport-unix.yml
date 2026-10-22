@@ -28,6 +28,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Version from canonical build definition
+        run: echo "LAUNCHER_VERSION=$(python3 scripts/package-unix.py --version)" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -84,7 +86,7 @@ jobs:
           done
           curl --fail --location --retry 3 https://github.com/AppImageCommunity/AppImageUpdate/releases/download/continuous/AppImageUpdate-x86_64.AppImage -o AppDir/usr/bin/AppImageUpdate.AppImage
           chmod +x AppDir/usr/bin/AppImageUpdate.AppImage
-          export UPDATE_INFORMATION="gh-releases-zsync|corderovibes-collab|luna-eternal-launcher|latest|luna-launcher-linux-x64-*.AppImage.zsync"
+          export UPDATE_INFORMATION="gh-releases-zsync|Pokereport-Minecraft|luna-eternal-launcher|latest|luna-launcher-linux-x64-*.AppImage.zsync"
           # Optional TIFF/JPEG2000/MNG plugins link legacy system ABIs absent on Noble.
           # Minecraft assets use PNG/JPEG/WebP; preserve those plugins.
           for optional in libqtiff.so libqjp2.so libqmng.so; do
@@ -92,7 +94,7 @@ jobs:
           done
           export EXTRA_PLATFORM_PLUGINS=libqoffscreen.so
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          export OUTPUT="luna-launcher-linux-x64-0.2.4.AppImage"
+          export OUTPUT="luna-launcher-linux-x64-${LAUNCHER_VERSION}.AppImage"
           export NO_APPSTREAM=1
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage -i AppDir/usr/share/icons/hicolor/scalable/apps/net.pokereport.LunaEternal.svg
           chmod +x "$OUTPUT"
@@ -109,13 +111,17 @@ jobs:
           codesign --force --deep --sign - install/LunaEternal.app
           install/LunaEternal.app/Contents/MacOS/lunaeternal --version
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent install/LunaEternal.app dist/PokeReport-Launcher-0.2.4-${{ matrix.platform }}.zip
+          ditto -c -k --sequesterRsrc --keepParent install/LunaEternal.app dist/PokeReport-Launcher-${LAUNCHER_VERSION}-${{ matrix.platform }}.zip
       - name: Staff entry and checksums
         run: python3 scripts/package-unix.py ${{ matrix.platform }}
       - uses: actions/upload-artifact@v4
         with:
           name: PokeReport-${{ matrix.platform }}
-          path: dist/*
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.zsync
+            dist/PokeReport-Launcher-*.zip
+            dist/SHA256SUMS
           if-no-files-found: error
 
   repackage-linux:
@@ -123,6 +129,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Version from canonical build definition
+        run: echo "LAUNCHER_VERSION=$(python3 scripts/package-unix.py --version)" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with:
           name: PokeReport-linux-x64
@@ -141,12 +149,15 @@ jobs:
           curl --fail --location --retry 3 https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool.AppImage
           chmod +x appimagetool.AppImage
           mkdir dist
-          ARCH=x86_64 ./appimagetool.AppImage -u 'gh-releases-zsync|corderovibes-collab|luna-eternal-launcher|latest|luna-launcher-linux-x64-*.AppImage.zsync' squashfs-root dist/luna-launcher-linux-x64-0.2.4.AppImage
+          ARCH=x86_64 ./appimagetool.AppImage -u 'gh-releases-zsync|Pokereport-Minecraft|luna-eternal-launcher|latest|luna-launcher-linux-x64-*.AppImage.zsync' squashfs-root dist/luna-launcher-linux-x64-${LAUNCHER_VERSION}.AppImage
           chmod +x dist/*.AppImage
           QT_QPA_PLATFORM=offscreen dist/*.AppImage --appimage-extract-and-run --version
           python3 scripts/package-unix.py linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: PokeReport-linux-x64
-          path: dist/*
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.zsync
+            dist/SHA256SUMS
           if-no-files-found: error
