@@ -36,6 +36,10 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v31
 
+      - name: Verify analyzer configuration before compiling
+        run: |
+          nix develop --command bash -c 'clang-tidy --version && clang-tidy -verify-config && command -v clang-tidy-diff'
+
       - name: Run build
         # TODO(@getchoo): Figure out how to make this work with PCH
         run: |
@@ -49,5 +53,6 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
           nix develop --command bash -c '
-            clang-tidy -verify-config && git diff -U0 --no-color "$BASE_REF" | clang-tidy-diff.py -p1 -quiet -only-check-in-db
+            set -o pipefail
+            clang-tidy -verify-config && git diff -U0 --no-color "$BASE_REF" | clang-tidy-diff -p1 -path build -quiet -only-check-in-db
           '

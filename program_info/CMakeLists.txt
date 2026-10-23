@@ -32,7 +32,7 @@ set(Launcher_CommonName "LunaEternal")
 set(Launcher_DisplayName "PokeReport Network")
 set(Launcher_AppID "net.pokereport.LunaEternal")
 set(Launcher_Domain "pokereport.net")
-set(Launcher_Git "https://github.com/corderovibes-collab/luna-eternal-launcher")
+set(Launcher_Git "https://github.com/Pokereport-Minecraft/luna-eternal-launcher")
 
 set(Launcher_Name "${Launcher_CommonName}" PARENT_SCOPE)
 set(Launcher_DisplayName "${Launcher_DisplayName}" PARENT_SCOPE)

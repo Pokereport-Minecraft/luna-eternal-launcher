@@ -2132,8 +2132,13 @@ bool Application::handleDataMigration(const QString& currentData,
     //
     // Se corta aqui y no en cada sitio que llama, para que no se escape ninguna
     // de las variantes (Prism, PolyMC, MultiMC, Freesm).
+    Q_UNUSED(currentData);
+    Q_UNUSED(oldData);
+    Q_UNUSED(name);
+    Q_UNUSED(configFile);
     return false;
 
+#if 0  // Upstream importer retained for reference; kiosk mode never runs it.
     QString nomigratePath = FS::PathCombine(currentData, name + "_nomigrate.txt");
     QStringList configPaths = { FS::PathCombine(oldData, configFile), FS::PathCombine(oldData, BuildConfig.LAUNCHER_CONFIGFILE) };
 
@@ -2216,6 +2221,7 @@ bool Application::handleDataMigration(const QString& currentData,
         qWarning() << "<> Migration was skipped, due to existing data";
     }
     return true;
+#endif
 }
 
 void Application::triggerUpdateCheck()

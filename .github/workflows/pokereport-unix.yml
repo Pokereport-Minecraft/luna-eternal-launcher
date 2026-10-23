@@ -1,0 +1,169 @@
+name: PokeReport Linux and macOS
+on:
+  pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'launcher/**'
+      - 'scripts/package-unix.py'
+      - '.github/workflows/pokereport-unix.yml'
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: Existing Linux run to repackage without recompiling
+        type: string
+        default: ''
+      target:
+        type: choice
+        default: all
+        options: [all, linux, macos]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    if: inputs.artifact_run_id == ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.target == 'linux' && '[{"os":"ubuntu-24.04","platform":"linux-x64","arch":"x86_64"}]' || inputs.target == 'macos' && '[{"os":"macos-15-intel","platform":"macos-x64","arch":"x86_64"},{"os":"macos-15","platform":"macos-arm64","arch":"arm64"}]' || '[{"os":"ubuntu-24.04","platform":"linux-x64","arch":"x86_64"},{"os":"macos-15-intel","platform":"macos-x64","arch":"x86_64"},{"os":"macos-15","platform":"macos-arm64","arch":"arm64"}]') }}
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Version from canonical build definition
+        run: echo "LAUNCHER_VERSION=$(python3 scripts/package-unix.py --version)" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build extra-cmake-modules scdoc libarchive-dev libcmark-dev cmark libqrencode-dev libtomlplusplus-dev gamemode-dev libgl1-mesa-dev libxcb-cursor-dev libxkbcommon-dev libfuse2
+      - name: macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja extra-cmake-modules libarchive cmark qrencode tomlplusplus pkg-config
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix libarchive):$(brew --prefix)" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$(brew --prefix libarchive)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.2'
+          modules: qtimageformats qtnetworkauth
+          cache: true
+      - uses: actions/cache/restore@v4
+        if: runner.os == 'Linux'
+        with:
+          path: build
+          key: pokereport-linux-qt6102-${{ hashFiles('launcher/**', 'libraries/**', 'program_info/**', 'CMakeLists.txt', 'cmake/**') }}
+      - name: Configure
+        shell: bash
+        run: |
+          args=()
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            args+=("-DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}" "-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0" "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR;$CMAKE_PREFIX_PATH")
+          fi
+          cmake -S . -B build -G Ninja -DCMAKE_INSTALL_PREFIX="$PWD/install" -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF -DLauncher_QT_VERSION_MAJOR=6 -DLauncher_ENABLE_JAVA_DOWNLOADER=ON -DLauncher_BUILD_ARTIFACT=luna-launcher-${{ matrix.platform }} "${args[@]}"
+      - name: Build
+        run: cmake --build build --parallel 3
+      - uses: actions/cache/save@v4
+        if: runner.os == 'Linux'
+        with:
+          path: build
+          key: pokereport-linux-qt6102-${{ hashFiles('launcher/**', 'libraries/**', 'program_info/**', 'CMakeLists.txt', 'cmake/**') }}
+      - name: Tests
+        run: ctest --test-dir build --output-on-failure -E '^example64|example$'
+      - name: Install
+        run: cmake --install build --prefix "$PWD/install"
+      - name: Linux AppImage
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cmake --install build --prefix "$PWD/AppDir/usr"
+          for tool in linuxdeploy/linuxdeploy linuxdeploy/linuxdeploy-plugin-qt linuxdeploy/linuxdeploy-plugin-appimage; do
+            name="${tool##*/}"
+            curl --fail --location --retry 3 "https://github.com/$tool/releases/download/continuous/$name-x86_64.AppImage" -o "$name-x86_64.AppImage"
+            chmod +x "$name-x86_64.AppImage"
+          done
+          curl --fail --location --retry 3 https://github.com/AppImageCommunity/AppImageUpdate/releases/download/continuous/AppImageUpdate-x86_64.AppImage -o AppDir/usr/bin/AppImageUpdate.AppImage
+          chmod +x AppDir/usr/bin/AppImageUpdate.AppImage
+          export UPDATE_INFORMATION="gh-releases-zsync|Pokereport-Minecraft|luna-eternal-launcher|latest|luna-launcher-linux-x64-*.AppImage.zsync"
+          # Optional TIFF/JPEG2000/MNG plugins link legacy system ABIs absent on Noble.
+          # Minecraft assets use PNG/JPEG/WebP; preserve those plugins.
+          for optional in libqtiff.so libqjp2.so libqmng.so; do
+            rm -f "$QT_ROOT_DIR/plugins/imageformats/$optional"
+          done
+          export EXTRA_PLATFORM_PLUGINS=libqoffscreen.so
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export OUTPUT="luna-launcher-linux-x64-${LAUNCHER_VERSION}.AppImage"
+          export NO_APPSTREAM=1
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage -i AppDir/usr/share/icons/hicolor/scalable/apps/net.pokereport.LunaEternal.svg
+          chmod +x "$OUTPUT"
+          "$PWD/$OUTPUT" --appimage-extract >/dev/null
+          QT_QPA_PLATFORM=offscreen squashfs-root/AppRun --version
+          mkdir -p dist
+          mv "$OUTPUT" dist/
+          if [ -f "$OUTPUT.zsync" ]; then mv "$OUTPUT.zsync" dist/; fi
+      - name: macOS bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          "$QT_ROOT_DIR/bin/macdeployqt" install/LunaEternal.app -always-overwrite
+          codesign --force --deep --sign - install/LunaEternal.app
+          install/LunaEternal.app/Contents/MacOS/lunaeternal --version
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent install/LunaEternal.app dist/PokeReport-Launcher-${LAUNCHER_VERSION}-${{ matrix.platform }}.zip
+      - name: Staff entry and checksums
+        run: python3 scripts/package-unix.py ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PokeReport-${{ matrix.platform }}
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.zsync
+            dist/PokeReport-Launcher-*.zip
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+  repackage-linux:
+    if: inputs.artifact_run_id != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version from canonical build definition
+        run: echo "LAUNCHER_VERSION=$(python3 scripts/package-unix.py --version)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: PokeReport-linux-x64
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: input
+      - name: Complete AppImage updater
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2
+          chmod +x input/*.AppImage
+          input/*.AppImage --appimage-extract >/dev/null
+          curl --fail --location --retry 3 https://github.com/AppImageCommunity/AppImageUpdate/releases/download/continuous/AppImageUpdate-x86_64.AppImage -o squashfs-root/usr/bin/AppImageUpdate.AppImage
+          chmod +x squashfs-root/usr/bin/AppImageUpdate.AppImage
+          curl --fail --location --retry 3 https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool.AppImage
+          chmod +x appimagetool.AppImage
+          mkdir dist
+          ARCH=x86_64 ./appimagetool.AppImage -u 'gh-releases-zsync|Pokereport-Minecraft|luna-eternal-launcher|latest|luna-launcher-linux-x64-*.AppImage.zsync' squashfs-root dist/luna-launcher-linux-x64-${LAUNCHER_VERSION}.AppImage
+          chmod +x dist/*.AppImage
+          QT_QPA_PLATFORM=offscreen dist/*.AppImage --appimage-extract-and-run --version
+          python3 scripts/package-unix.py linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PokeReport-linux-x64
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.zsync
+            dist/SHA256SUMS
+          if-no-files-found: error

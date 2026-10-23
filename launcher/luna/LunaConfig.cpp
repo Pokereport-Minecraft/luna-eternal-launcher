@@ -28,7 +28,7 @@ namespace {
 // ⚠ LA RAMA DE ESTE REPOSITORIO ES `master`, NO `main`.
 //   Escribir `main` por costumbre publica bien y deja el enlace en 404: todo
 //   el mundo sin pack, y el launcher sin forma de saber por que. Ya paso.
-const auto kRepo = QStringLiteral("corderovibes-collab/luna-eternal-pack");
+const auto kRepo = QStringLiteral("Pokereport-Minecraft/luna-eternal-pack");
 const auto kBranch = QStringLiteral("master");
 }  // namespace
 
@@ -49,9 +49,15 @@ QString defaultProfile()
     return QStringLiteral("jugador");
 }
 
+bool staffToolsEnabled()
+{
+    // Staff shortcut opt-in only; server permissions remain authoritative.
+    return qEnvironmentVariable("POKEREPORT_STAFF_TOOLS") == QStringLiteral("1");
+}
 QStringList profiles()
 {
-    return { QStringLiteral("jugador"), QStringLiteral("constructor") };
+    if(staffToolsEnabled())return {QStringLiteral("jugador"),QStringLiteral("constructor")};
+    return {QStringLiteral("jugador")};
 }
 
 namespace {
